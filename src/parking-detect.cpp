@@ -35,22 +35,45 @@ rtree_type rtree;
 void queryCheck(const point_type& centroid, const segment_type& linestring, const double& orientation)
 {
     results.clear();
-    // rtree.query(bgi::nearest(centroid, 5), std::back_inserter(results));
-    rtree.query(bgi::intersects(linestring), std::back_inserter(results));
-    // rtree.query(bgi::intersects())
+
+    // Tolerance for orientation similarity in degrees
+    double orientation_tolerance = 2.0; // degrees
+    double max_distance = 0.05; // 50mm converted to meters for centroid proximity check
     
+    // // Lambda function to convert degrees to radians for the orientation check
+    // auto degreesToRadians = [](double degrees) {
+    //     return degrees * M_PI / 180.0;
+    // };
+
+    // double orientation_tolerance_rad = degreesToRadians(orientation_tolerance);
+
+    // First check: Intersection with similar orientation lines
+    rtree.query(bgi::intersects(linestring) && bgi::satisfies([&](const std::pair<segment_type, EndpointState>& v) {
+        double orientation_diff = std::abs(v.second.orientation - orientation);
+        return orientation_diff <= orientation_tolerance;
+    }), std::back_inserter(results));
+
     if (results.empty()) {
-        rtree.insert(std::make_pair(linestring, EndpointState{false, false, orientation}));
-        std::cout << "  line inserted " << std::endl;
-    } else {
-        std::cout << "Intersecting lines found: " << results.size() << std::endl;
+        // Second check: Nearby lines with similar orientation
+        rtree.query(bgi::nearest(centroid, 5) && bgi::satisfies([&](const std::pair<segment_type, EndpointState>& v) {
+            double orientation_diff = std::abs(v.second.orientation - orientation);
+            point_type segment_centroid;
+            bg::centroid(v.first, segment_centroid);
+            double distance = bg::distance(segment_centroid, centroid);
+            return (orientation_diff <= orientation_tolerance) && (distance <= max_distance);
+        }), std::back_inserter(results));
     }
 
-    // // Print the results
-    // for (const auto& result : results) {
-    // std::cout << "Segment: (" << bg::wkt(result.first.first) << ", " << bg::wkt(result.first.second) << "), Endpoint State: ("
-    //             << std::boolalpha << result.second.stateOne << ", " << result.second.stateTwo << ", " << result.second.orientation << ")" << std::endl;
-    // }
+    if (results.empty()) {
+        // If no matching line found, insert the new line
+        rtree.insert(std::make_pair(linestring, EndpointState{false, false, orientation}));
+        std::cout << "Line inserted." << std::endl;
+    } else {
+        std::cout << "Intersecting or nearby similar lines found: " << results.size() << std::endl;
+    }
+
+    // 
+
 
 }
 
