@@ -106,7 +106,7 @@ def detection_callback(message, tf_buffer, arr_inv, K_inv, rec_pub):
 class InverseProjector:
     def __init__(self):
         # extrinsic orientation of camera [rad] CHECK ORDER BEFORE WE ADD IN PITCH
-        self.pitch = 0.122173
+        self.pitch = 0.11 #0.122173 
         self.roll = 0.0
         self.yaw = 1.57  # Note about the rotation order and its impact
 
