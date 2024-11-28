@@ -65,10 +65,17 @@ def ransac_line_detection(pcl_cloud):
     Use RANSAC to detect lines in the PCL Point Cloud.
     """
     start_time = time.perf_counter()
-    seg = pcl_cloud.make_segmenter()
+
+    # Statistical Outlier Removal
+    sor = pcl_cloud.make_statistical_outlier_filter()
+    sor.set_mean_k(60) #higher = more processing time
+    sor.set_std_dev_mul_thresh(0.25)
+    cleaned_cloud = sor.filter()
+
+    seg = cleaned_cloud.make_segmenter()
     seg.set_model_type(pcl.SACMODEL_LINE)
     seg.set_method_type(pcl.SAC_RANSAC)
-    seg.set_distance_threshold(0.1)  # Set the distance threshold between points, points within this are considered inliers
+    seg.set_distance_threshold(0.06)  # Was 0.1 - Set the distance threshold between points, points within this are considered inliers
 
     indices, coefficients = seg.segment()
     inlier_object = pcl_cloud.extract(indices, negative=False)
@@ -144,6 +151,9 @@ def cloud_callback(point_cloud2_msg, line1_pub, line2_pub, outlier_pub, tf_buffe
     """
     pcl_cloud = point_cloud2_to_pcl(point_cloud2_msg)
     inlier_object, coefficients, outlier_objects = ransac_line_detection(pcl_cloud)
+
+    outlier_ros_cloud = pcl_to_ros_with_color(inlier_object, 255, 0 , 0)
+    outlier_pub.publish(outlier_ros_cloud)
 
     ## First Detected Line
     if coefficients:

@@ -2,10 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2 as cv
 import copy
-import open3d as o3d
-from tqdm import tqdm
+# import open3d as o3d
+# from tqdm import tqdm
 from createPointCloud2 import create_point_cloud2
-from numba import jit
+# from numba import jit
+import time
 
 import rospy
 import struct
@@ -15,7 +16,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as msg_Image
 
 # this follows the publication but finding the inverse of A in runtime is comp heavy - takes 3 seconds after jit
-@jit(nopython=True)
+# @jit(nopython=True)
 def inverse_projection(P, t, img_x, img_y):
     '''Transforms a point from 'image coordinates' (x_I, y_I) [px] -> 'world (plane) coordinates' (x_W, y_W, z_W) [m] where z = 0
     
@@ -63,7 +64,7 @@ class InverseProjector:
         self.point_cloud_pub = rospy.Publisher("point_cloud_topic", PointCloud2, queue_size=10)
 
         # extrinsic orientation of camera [rad] CHECK ORDER BEFORE WE ADD IN PITCH
-        self.pitch = 0.122173
+        self.pitch = 0.108 # going to try and tune this, previous was 0.122173, saw much longer but straighter lines with 0.10. was 0.11. Hard to tell what is more correct and what is just poor detection. 
         self.roll = 0.0
         self.yaw = 1.57  # Note about the rotation order and its impact
 
@@ -137,6 +138,7 @@ class InverseProjector:
 
     def imageCallback(self, data):
         try:
+            start_time = time.perf_counter()
             img = self.bridge.imgmsg_to_cv2(data, desired_encoding="mono8")    
             # IMG_H, IMG_W = img.shape # 720 1280 3 
 
@@ -144,6 +146,7 @@ class InverseProjector:
             # h, w = img.shape[:2]
             # newcameramtx, roi = cv.getOptimalNewCameraMatrix(self.K, self.dist_coeffs, (w,h), 1, (w,h))
             # img = cv.undistort(img, self.K, self.dist_coeffs, None, newcameramtx)
+            # img = cv.undistort(img, self.K, self.dist_coeffs)
 
             # Find indices of pixels that have a value of 255
             y_indices, x_indices = np.where(img == 255)
@@ -170,9 +173,12 @@ class InverseProjector:
             #         real_world_position_tuple = tuple(real_world_position.flatten())
             #         points_with_colors.append(real_world_position_tuple + (r, g, b))
 
-            # this is like upper limit, if need a square zone, add a lower limit and an & in if statement
-            compare_values = np.array([[10.0], [10.0], [1.0]]) # surprised it is that far..
+            # this is like upper limit, if need a square zone, add a lower limit and an "and" in if statement
+            compare_values = np.array([[0.75], [10.0], [1.0]]) # surprised it is that far.. control further away from robot and to the right
             compare_values_flattened = compare_values.flatten()
+
+            lower_values = np.array([[-0.75], [1.0], [0.0]]) # x y z. controls towards the robot and to the left
+            lower_values_flattened = lower_values.flatten()
 
             # print(real_world_position[:, 2].shape)
 
@@ -183,9 +189,13 @@ class InverseProjector:
                 b, g, r = 255, 255, 255
                 # print((real_world_position[:, i] <= compare_values).all)
                 # Construct the tuple and append it to the list
-                if (real_world_position[:, i] <= compare_values_flattened).all():
+                if (real_world_position[:, i] <= compare_values_flattened).all() and (real_world_position[:, i] >= lower_values_flattened).all():
                     real_world_position_tuple = tuple(real_world_position[:, i])  # Convert column to tuple
                     points_with_colors.append(real_world_position_tuple + (r, g, b))
+
+
+            end_time = time.perf_counter()
+            print(f"IPM Completed in {end_time - start_time:.6f} seconds")
 
             # create_point_cloud2 is a function that creates a PointCloud2 message
             point_cloud2_msg = create_point_cloud2(points_with_colors)
@@ -193,12 +203,13 @@ class InverseProjector:
             # Publish the message
             self.point_cloud_pub.publish(point_cloud2_msg)
 
+
         except CvBridgeError as e:
             print(e)
             return
     
 def main():
-    camera_topic = '/cam1/lane_mask'
+    camera_topic = '/cam1/lane_mask' #curb_mask
     projector = InverseProjector(camera_topic)
     rospy.spin() 
 
