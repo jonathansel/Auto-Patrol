@@ -17,6 +17,9 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   rosbag
   message_generation
+  image_transport
+  pcl_conversions
+  pcl_ros
 )
 
 find_package(OpenCV REQUIRED)
@@ -153,6 +156,10 @@ add_dependencies(parking-detect ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXP
 add_executable(parking-offline src/parking-offline.cpp)
 target_link_libraries(parking-offline ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 add_dependencies(parking-offline ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_executable(ipm src/ipm.cpp)
+target_link_libraries(ipm ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+add_dependencies(ipm ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the

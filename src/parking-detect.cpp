@@ -83,10 +83,7 @@ bool verticalProximityCheck(const segment_type& seg1, const point_type& centroid
     double vertical_proximity = std::abs(cross_prod) / (mag2);
     // std::cout << "VERTICAL PROXIMITY: " << vertical_proximity << std::endl;
 
-    if (vertical_proximity >= vert_thresh){
-        std::cout << "vertical proximity NG seg: " << bg::wkt(seg1) << ", centroid: " << bg::wkt(centroid) << "prox: " << vertical_proximity << std::endl;
-    }
-
+ 
     return vertical_proximity <= vert_thresh;
 }
 
@@ -174,7 +171,7 @@ void visualizeSegments(ros::Publisher& marker_pub) {
     // Set the color (red, green, blue, alpha)
     line_list.color.r = 1.0;
     line_list.color.g = 0.0;
-    line_list.color.b = 0.0;
+    line_list.color.b = 1.0;
     line_list.color.a = 1.0;
 
     for (const auto& seg : rtree) {
