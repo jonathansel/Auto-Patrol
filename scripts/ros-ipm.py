@@ -91,12 +91,13 @@ class InverseProjector:
         self.T_c2w = np.array([[self.x, self.y, self.z]]).T
 
         self.R_w2c = self.R_c2w.T
-        self.T_w2c = -(self.R_w2c @ self.T_c2w) # note how its not simply the inverse
+        self.T_w2c = -(self.R_w2c @ self.T_c2w) # note how its not simply the inverse - need to review this
 
         self.R_cam2img = np.array([[0, -1, 0],
                                    [0, 0, -1],
                                    [1, 0,  0]])
 
+        # These 3 variables don't seem to be used anymore as we use inverseProj2
         self.C = self.K @ self.R_cam2img
         self.P = self.C @ self.R_w2c 
         self.t = self.C @ self.T_w2c
@@ -104,7 +105,7 @@ class InverseProjector:
         ## For inverseProj2 - TODO change to meaningful names
         self.arr = np.zeros((3,3))
         self.R_w2i = self.R_cam2img @ self.R_w2c
-        self.T_w2i = (self.R_cam2img @ self.T_w2c) 
+        self.T_w2i = (self.R_cam2img @ self.T_w2c) # why didn't we do negative here like T_w2c calculation above?
 
         self.arr[:, 0] = self.R_w2i[:,0] #rx
         self.arr[:, 1] = self.R_w2i[:,1] #ry
