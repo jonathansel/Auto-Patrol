@@ -4,6 +4,10 @@
 #include <Eigen/Dense>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <visualization_msgs/Marker.h>     // For Marker
+#include <geometry_msgs/Point.h>           // For Point
+#include <tf2_ros/transform_listener.h>     // For TF2
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h> // For transforming points
 #include <sensor_msgs/Image.h>
 #include <vector>
 
@@ -34,6 +38,10 @@ private:
     ros::Subscriber image_sub_;
     ros::Publisher point_cloud_pub_;
     ros::Publisher warped_image_pub_;
+    ros::Publisher line_one_pub_;
+
+    tf2_ros::Buffer tf_buffer_;              // TF2 buffer
+    tf2_ros::TransformListener tf_listener_; // TF2 listener
 
 };
 

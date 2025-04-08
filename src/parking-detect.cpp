@@ -9,6 +9,24 @@
 #include <visualization_msgs/Marker.h>
 #include <geometry_msgs/Point.h>
 
+#define RESET   "\033[0m"
+#define RED     "\033[91m"
+#define GREEN   "\033[92m"
+#define YELLOW  "\033[93m"
+
+// Helper function to time sections
+class Timer {
+    std::string name_;
+    std::chrono::high_resolution_clock::time_point start_;
+public:
+    Timer(const std::string& name) : name_(name), start_(std::chrono::high_resolution_clock::now()) {}
+    ~Timer() {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start_).count();
+        std::cout << name_ << ": " << duration / 1000.0 << " ms" << std::endl;
+    }
+};
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
@@ -150,7 +168,8 @@ void spatialRelation(const segment_type& seg1, const segment_type& seg2, const d
         rtree.remove(seg1);
         rtree.insert(longest_segment);
     } else { //need to debug this, I'm, thinking if it's non-overlapping and too far away then you need to insert it. 
-        std::cout << "NEW INSERT - SPATIAL" << std::endl;
+        // std::cout << "NEW INSERT - SPATIAL" << std::endl;
+        ROS_WARN_STREAM(RED << "NEW INSERT - SPATIAL" << RESET);
         rtree.insert(seg2);
     }
 }
@@ -196,7 +215,7 @@ void queryCheck(const segment_type& query) {
     
     // Define the maximum distance for nearest neighbor search in meters - tune
     double vert_thresh = 1; // 0.2 meters or 20cm
-    double tau_theta = 0.0872665; // 5 degrees in rad 3: 0.0523599
+    double tau_theta = 0.0872665; // 3 deg: 0.0523599 5 deg: 0.0872665 10 deg: 0.174533
     double tau_s = 0.8; //for spatial non-overlapping scenarios
 
     // point_type centroid;
@@ -206,7 +225,8 @@ void queryCheck(const segment_type& query) {
 
     rtree.query(bgi::nearest(centroid, 5), std::back_inserter(results)); //change to linestring
 
-    // Remove segments that do not pass the angular proximity check
+    // Remove segments that do not pass the angular proximity check 
+    // i.e. checking if query segment (newly detected) can be merged with any neighbours. Remove any neighbours it can't merge with.
     results.erase(
         std::remove_if(results.begin(), results.end(), 
             [&query, tau_theta](const segment_type& result) {
@@ -266,6 +286,7 @@ void queryCheck(const segment_type& query) {
 
 void markerCallback(const visualization_msgs::Marker::ConstPtr& msg)
 {
+    Timer timer("Processing time");
     // ROS_INFO("Received marker with ID %d", msg->id);
     // process the marker message here
     if (msg->points.size() >= 2) {

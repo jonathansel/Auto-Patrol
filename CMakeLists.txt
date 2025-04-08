@@ -15,6 +15,9 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   pcl_conversions
   pcl_ros
+  geometry_msgs
+  tf2_ros
+  tf2_geometry_msgs
 )
 
 ## Find system dependencies
@@ -43,7 +46,7 @@ catkin_package(
     sensor_msgs 
     cv_bridge 
     rosbag 
-    message_runtime
+    message_runtime 
 )
 
 ## Specify include directories
