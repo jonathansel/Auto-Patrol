@@ -10,21 +10,25 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h> // For transforming points
 #include <sensor_msgs/Image.h>
 #include <vector>
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/eigen.hpp>
 
 class Ipm {
 public:
-    Ipm(const std::string& camera_topic);
+    Ipm();
     Eigen::Matrix3d rotationMatrix();
-    std::vector<std::pair<double, double>> computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg);
+    void computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg);
+    // std::vector<std::pair<double, double>> 
     
 
 private:
     void imageCallback(const sensor_msgs::ImageConstPtr& msg);
+    void loadParameters(); // New method to load YAML
 
     // Camera extrinsic parameters
-    double roll_ = 0.0;
-    double pitch_ = 0.108;
-    double yaw_ = 1.57;
+    double roll_;
+    double pitch_;
+    double yaw_;
 
     // Precomputed matrices and vectors
     Eigen::Matrix3d K_;         // Intrinsic matrix
@@ -32,11 +36,11 @@ private:
     Eigen::Vector3d T_;         // Translation vector
     Eigen::Matrix3d R_;         // Rotation matrix (precomputed)
     Eigen::Matrix3d S_;         // Scaling matrix
+    cv::Mat H_cv;              // Homography matrix 
 
     // ROS members
     ros::NodeHandle nh_;
     ros::Subscriber image_sub_;
-    ros::Publisher point_cloud_pub_;
     ros::Publisher warped_image_pub_;
     ros::Publisher line_one_pub_;
 

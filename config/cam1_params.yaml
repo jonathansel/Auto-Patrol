@@ -1,0 +1,22 @@
+camera:
+  topic: "/cam1/lane_mask"
+
+intrinsics:
+  fx: 901.1387623297165   # Focal length x
+  fy: 902.8926336853814   # Focal length y
+  cx: 645.2704047048309   # Principal point x
+  cy: 366.13035318739895  # Principal point y
+
+extrinsics:
+  roll: 0.0              # Roll angle (radians)
+  pitch: 0.108           # Pitch angle (radians)
+  yaw: 1.57             # Yaw angle (radians)
+  tx: -0.2489           # Translation x
+  ty: 0.18991           # Translation y
+  tz: 1.05653           # Translation z
+
+scaling:
+  scale_x: 333.333333   # 500.0 / 1.5
+  scale_y: -333.333333  # -3000.0 / 9.0
+  x_min: -0.75          # Minimum x in world coordinates
+  y_min: 10.0           # Minimum y in world coordinates

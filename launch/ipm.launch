@@ -1,0 +1,8 @@
+<launch>
+    <!-- First IPM node -->
+    <node pkg="auto_patrol" type="ipm" name="ipm_node_cam1" output="screen">
+        <rosparam file="$(find auto_patrol)/config/cam1_params.yaml" command="load" />
+        <!-- Optional: remap topics if needed -->
+    </node>
+
+</launch>

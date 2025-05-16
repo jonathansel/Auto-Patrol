@@ -30,12 +30,15 @@ add_message_files(
   FILES
   CarDetection.msg
   CarDetectionArray.msg
+  Line.msg
+  LineArray.msg
 )
 
 ## Generate messages with dependencies
 generate_messages(
   DEPENDENCIES
   std_msgs
+  geometry_msgs
 )
 
 ## Catkin package configuration
@@ -47,6 +50,7 @@ catkin_package(
     cv_bridge 
     rosbag 
     message_runtime 
+    geometry_msgs
 )
 
 ## Specify include directories

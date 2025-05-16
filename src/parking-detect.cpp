@@ -106,8 +106,9 @@ bool verticalProximityCheck(const segment_type& seg1, const point_type& centroid
 }
 
 // seg1 = result (P1P2) seg2 = query (Q1Q2)
+// we only accept one segment, but vertical prox could allow for multiple!
 void spatialRelation(const segment_type& seg1, const segment_type& seg2, const double& tau_s) {
-    // Calculate distances between each pair of endpoints
+    // Calculate distances between each pair of endpoints - I guess we don't know spatially if the first or second is closer.
     double d1 = euclideanDistance(seg1.first, seg2.first);
     double d2 = euclideanDistance(seg1.first, seg2.second);
     double d3 = euclideanDistance(seg1.second, seg2.first);
@@ -144,9 +145,10 @@ void spatialRelation(const segment_type& seg1, const segment_type& seg2, const d
 
     // std::cout << "max distance: " << max_distance << std::endl;
 
+    // is this really correct? because p1q2 is uncertain. But can't use above either, because we assume q2 is furthest out. If it isn't really, then what's the choice? 
     auto direction1 = directionVector(seg1.first, seg1.second);//p1p2
     auto direction2 = directionVector(seg1.first, seg2.first); //p1q1
-    auto direction3 = directionVector(seg1.first, seg2.second); //p1q2
+    auto direction3 = directionVector(seg1.first, seg2.second); //p1q2 - but again we aren't checking if p1q2 is the longest seg - does it matter?
     double mag1 = magnitude(direction1); //mag(p1p2)
     double margin = tau_s * mag1; // 0 <= tau_s <= 1
 
