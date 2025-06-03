@@ -9,6 +9,7 @@
 #include <tf2_ros/transform_listener.h>     // For TF2
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h> // For transforming points
 #include <sensor_msgs/Image.h>
+#include <sensor_msgs/CompressedImage.h>
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>
@@ -23,6 +24,8 @@ public:
 
 private:
     void imageCallback(const sensor_msgs::ImageConstPtr& msg);
+    void imageOGCallback(const sensor_msgs::CompressedImageConstPtr& msg);
+
     void loadParameters(); // New method to load YAML
 
     // Camera extrinsic parameters
@@ -37,10 +40,13 @@ private:
     Eigen::Matrix3d R_;         // Rotation matrix (precomputed)
     Eigen::Matrix3d S_;         // Scaling matrix
     cv::Mat H_cv;              // Homography matrix 
+    cv::Mat image_og;              // OG Image 
 
     // ROS members
     ros::NodeHandle nh_;
     ros::Subscriber image_sub_;
+    ros::Subscriber image_sub_og;
+
     ros::Publisher warped_image_pub_;
     ros::Publisher line_one_pub_;
 

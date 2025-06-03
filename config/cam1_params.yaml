@@ -8,8 +8,8 @@ intrinsics:
   cy: 366.13035318739895  # Principal point y
 
 extrinsics:
-  roll: 0.0              # Roll angle (radians)
-  pitch: 0.108           # Pitch angle (radians)
+  roll: 0       # Roll angle (radians) was 0 some improvement with 0.0174533 
+  pitch: 0.108      # Pitch angle (radians) was 0.108 was some improvement with 0.1090831 
   yaw: 1.57             # Yaw angle (radians)
   tx: -0.2489           # Translation x
   ty: 0.18991           # Translation y

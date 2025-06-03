@@ -9,6 +9,8 @@
 #include <visualization_msgs/Marker.h>
 #include <geometry_msgs/Point.h>
 
+#include "auto_patrol/LineArray.h" // Add custom message
+
 #define RESET   "\033[0m"
 #define RED     "\033[91m"
 #define GREEN   "\033[92m"
@@ -101,7 +103,6 @@ bool verticalProximityCheck(const segment_type& seg1, const point_type& centroid
     double vertical_proximity = std::abs(cross_prod) / (mag2);
     // std::cout << "VERTICAL PROXIMITY: " << vertical_proximity << std::endl;
 
- 
     return vertical_proximity <= vert_thresh;
 }
 
@@ -340,8 +341,39 @@ void markerCallback(const visualization_msgs::Marker::ConstPtr& msg)
         visualizeSegments(marker_pub);
         
     } else {
+        ROS_WARN("Insufficient points.");
+    }
+}
+
+
+void lineCallback(const auto_patrol::LineArray::ConstPtr& line_array){ //boost::shared_ptr<const auto_patrol::LineArray> aliased as ConstPtr
+    if (line_array->lines.size() > 0){
+        ROS_INFO("Lines: %zu", line_array->lines.size());
+
+        for (const auto& line : line_array->lines){
+            double x1 = line.start.x, y1 = line.start.y;
+            double x2 = line.end.x, y2 = line.end.y;
+
+            point_type point_1(x1, y1);
+            point_type point_2(x2, y2);
+            
+            segment_type linestring(point_1, point_2);
+
+            double length = bg::length(linestring);
+
+            if (length >= 1.5) {
+                queryCheck(linestring);    
+            }
+        }
+
+        visualizeSegments(marker_pub);
+
+    } 
+    
+    else {
         ROS_WARN("Received marker with insufficient points.");
     }
+
 }
 
 int main(int argc, char **argv) {
@@ -349,7 +381,9 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "auto_patrol");
     ros::NodeHandle nh;
 
-    ros::Subscriber marker_sub = nh.subscribe("/line_one", 10, markerCallback);
+    // ros::Subscriber marker_sub = nh.subscribe("/line_one", 10, markerCallback);
+    ros::Subscriber hough_sub = nh.subscribe("/line_array", 10, lineCallback);
+
     // ros::Subscriber marker_sub2 = nh.subscribe("/line_two", 10, markerCallback);
     marker_pub = nh.advertise<visualization_msgs::Marker>("marker_array", 10);
 

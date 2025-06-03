@@ -31,10 +31,11 @@ Ipm::Ipm() : nh_("~"), tf_buffer_(), tf_listener_(tf_buffer_) {
 
     // Initialize ROS subscribers and publishers
     image_sub_ = nh_.subscribe(nh_.param<std::string>("camera/topic", "/cam1/lane_mask"), 1, &Ipm::imageCallback, this);
+    image_sub_og = nh_.subscribe("/cam1/color/image_raw/compressed", 1, &Ipm::imageOGCallback, this); 
+
     warped_image_pub_ = nh_.advertise<sensor_msgs::Image>("warped_image_topic", 10);
     // line_one_pub_ = nh_.advertise<visualization_msgs::Marker>("/line_one", 10);
     line_one_pub_ = nh_.advertise<auto_patrol::LineArray>("/line_array", 10);
-
 
     ROS_INFO("IPM initialized!");
 }
@@ -91,6 +92,8 @@ void Ipm::loadParameters() {
                     R_w2i(2, 0), R_w2i(2, 1), T_w2i(2);
 
     Eigen::Matrix3d H = S_ * H_world_to_img.inverse() * K_inv_;
+
+    // Eigen::Matrix3d H = S_ * H_world_to_img.inverse() * K_inv_;
 
     cv::eigen2cv(H, H_cv);
 
@@ -383,10 +386,10 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
 
     auto rep_lines = lineDetection(warped);
     
-    if (rep_lines.empty()) {
-        ROS_INFO("No representative lines detected, skipping visualization and publishing");
-        return;
-    }
+    // if (!rep_lines.empty()) {
+    //     ROS_INFO("No representative lines detected, skipping visualization and publishing");
+    //     return;
+    // }
     // ROS_INFO("Number of clusters detected: %zu", clusters.size());
 
     // size_t total_lines = 0;
@@ -430,8 +433,19 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
 
     // sensor_msgs::ImagePtr warped_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", warpedCopy).toImageMsg();
 
+
+    // Overlay warped_with_lines onto image_og
+    cv::Mat combined_image;
+    if (!image_og.empty()) {
+        combined_image = image_og.clone(); // Base is color image
+        warped_with_lines.copyTo(combined_image, warped); // Copy non-black pixels where mask is white
+    } else {
+        ROS_WARN("image_og empty, using warped_with_lines");
+        combined_image = warped_with_lines;
+    }
+
     // downscale if slow and remove if not debugging
-    sensor_msgs::ImagePtr warped_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", warped_with_lines).toImageMsg();
+    sensor_msgs::ImagePtr warped_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", combined_image).toImageMsg();
     warped_msg->header = msg->header;
     warped_image_pub_.publish(warped_msg);
 
@@ -448,7 +462,7 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
     const double x_min = -0.75; // From loadParameters
     const double y_min = 10.0;
 
-// Cache transform once
+    // Cache transform once
     geometry_msgs::TransformStamped transform;
     try {
         auto timer3 = std::make_unique<Timer>("Transform Lookup");
@@ -558,6 +572,19 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
 
 void Ipm::imageCallback(const sensor_msgs::ImageConstPtr& msg) {
     computeLineCoordinates(msg); 
+}
+
+void Ipm::imageOGCallback(const sensor_msgs::CompressedImageConstPtr& msg) {
+    cv_bridge::CvImagePtr cv_ptr;
+    try {
+        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+    } catch (cv_bridge::Exception& e) {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        // return {};
+    }
+
+    cv::warpPerspective(cv_ptr->image, image_og, H_cv, cv::Size(500, 3000)); // we need to fully understand how it does this scaling
+
 }
 
 int main(int argc, char** argv) {
