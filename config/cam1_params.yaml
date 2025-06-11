@@ -2,21 +2,27 @@ camera:
   topic: "/cam1/lane_mask"
 
 intrinsics:
-  fx: 901.1387623297165   # Focal length x
-  fy: 902.8926336853814   # Focal length y
-  cx: 645.2704047048309   # Principal point x
-  cy: 366.13035318739895  # Principal point y
+  fx: 901.1387623297165   # Focal length x realsense: 909.217468
+  fy: 902.8926336853814   # Focal length y realsense: 909.916870
+  cx: 645.2704047048309   # Principal point x realsense: 648.805847
+  cy: 366.13035318739895  # Principal point y realsense: 361.682037
 
 extrinsics:
-  roll: 0       # Roll angle (radians) was 0 some improvement with 0.0174533 
-  pitch: 0.108      # Pitch angle (radians) was 0.108 was some improvement with 0.1090831 
-  yaw: 1.57             # Yaw angle (radians)
-  tx: -0.2489           # Translation x
-  ty: 0.18991           # Translation y
-  tz: 1.05653           # Translation z
+  roll: 0.01466       # Roll angle (radians) was 0 some improvement with 0.0174533 
+  pitch: 0.113446      # Pitch angle (radians) was 0.108 was some improvement with 0.1090831 0.122173 (actual)
+  yaw: 1.5814             # Yaw angle (radians)
+  tx: -0.28119           # Translation x was -0.2489 - all based on udrf but was not to optical frame! real is -0.28119
+  ty: 0.2016           # Translation y was 0.18991 real is 0.2016
+  tz: 1.04           # Translation z was 1.05653 real is 1.06787
 
 scaling:
-  scale_x: 333.333333   # 500.0 / 1.5
-  scale_y: -333.333333  # -3000.0 / 9.0
+  scale_x: 333.333333  # 500.0 / 1.5 = 333.333333
+  scale_y: -333.333333  # -3000.0 / 9.0 = -333.333333
   x_min: -0.75          # Minimum x in world coordinates
   y_min: 10.0           # Minimum y in world coordinates
+
+distortion:
+  k1: 0.07968248  # Radial distortion coefficient k1
+  k2: -0.13313626   # Radial distortion coefficient k2
+  p1: 0.00236398    # Tangential distortion coefficient p1
+  p2: -0.00306793    # Tangential distortion coefficient p2

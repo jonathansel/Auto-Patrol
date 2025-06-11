@@ -39,6 +39,10 @@ private:
     Eigen::Vector3d T_;         // Translation vector
     Eigen::Matrix3d R_;         // Rotation matrix (precomputed)
     Eigen::Matrix3d S_;         // Scaling matrix
+    Eigen::RowVector4d D_;         // Distortion matrix
+
+    cv::Mat D_cv;
+    cv::Mat K_cv;
     cv::Mat H_cv;              // Homography matrix 
     cv::Mat image_og;              // OG Image 
 

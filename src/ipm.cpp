@@ -34,7 +34,6 @@ Ipm::Ipm() : nh_("~"), tf_buffer_(), tf_listener_(tf_buffer_) {
     image_sub_og = nh_.subscribe("/cam1/color/image_raw/compressed", 1, &Ipm::imageOGCallback, this); 
 
     warped_image_pub_ = nh_.advertise<sensor_msgs::Image>("warped_image_topic", 10);
-    // line_one_pub_ = nh_.advertise<visualization_msgs::Marker>("/line_one", 10);
     line_one_pub_ = nh_.advertise<auto_patrol::LineArray>("/line_array", 10);
 
     ROS_INFO("IPM initialized!");
@@ -53,6 +52,7 @@ void Ipm::loadParameters() {
           0, fy, cy,
           0, 0, 1;
     K_inv_ = K_.inverse();
+    cv::eigen2cv(K_, K_cv);
 
     // Load extrinsic parameters
     nh_.param("extrinsics/roll", roll_, 0.0);
@@ -75,6 +75,19 @@ void Ipm::loadParameters() {
           0, scale_y, -y_min * scale_y,
           0, 0, 1;
 
+    // Load distortion parameters
+    double dist_k1, dist_k2, dist_p1, dist_p2;
+    nh_.param("distortion/k1", dist_k1, 0.07968248);
+    nh_.param("distortion/k2", dist_k2, -0.13313626);
+    nh_.param("distortion/p1", dist_p1, 0.00236398);
+    nh_.param("distortion/p2", dist_p2, -0.00306793);
+    D_ << dist_k1, dist_k2, dist_p1, dist_p2;
+
+    D_cv = cv::Mat(1, 4, CV_64F);
+    for (int i = 0; i < 4; ++i) {
+        D_cv.at<double>(0, i) = D_(i);
+    }
+
     Eigen::Matrix3d R_cam2img;
     R_cam2img << 0, -1, 0,
                 0, 0, -1,
@@ -93,11 +106,9 @@ void Ipm::loadParameters() {
 
     Eigen::Matrix3d H = S_ * H_world_to_img.inverse() * K_inv_;
 
-    // Eigen::Matrix3d H = S_ * H_world_to_img.inverse() * K_inv_;
-
     cv::eigen2cv(H, H_cv);
 
-    ROS_INFO("Parameters loaded from parameter server");
+    ROS_INFO("Parameters loaded from parameter server!");
 }
 
 Eigen::Matrix3d Ipm::rotationMatrix() {
@@ -162,14 +173,12 @@ bool angularProximityCheck(const LineSegment& seg1, const LineSegment& seg2, con
 }
 
 bool verticalProximityCheck(const LineSegment& seg1, const LineSegment& seg2, const double& vert_thresh) {
-    //just calc centroid here?
     auto direction1 = directionVector(seg1.start, seg2.centroid); //P1QM, note centroid is of the query segment, in rtree that would be the one that triggered the search, maybe have to swap?
     auto direction2 = directionVector(seg1.start, seg1.end); //P1P2
 
     double cross_prod = crossProduct(direction1, direction2);
     double mag2 = magnitude(direction2);
     double vertical_proximity = std::abs(cross_prod) / (mag2);
-    // std::cout << "VERTICAL PROXIMITY: " << vertical_proximity << std::endl;
  
     return vertical_proximity <= vert_thresh;
 }
@@ -214,20 +223,21 @@ std::vector<cv::Vec4i> lineDetection(cv::Mat & image) {
 
         // Skip contours with zero or very small area to avoid division by zero
         if (area < 1e-5) {
-            std::cout << "Contour " << i << ": Skipped (area too small)" << std::endl;
+            // std::cout << "Contour " << i << ": Skipped (area too small)" << std::endl;
             continue;
         }
 
         // Calculate compactness
         double compactness = (length * length) / (4 * CV_PI * area);
-        std::cout << "Contour " << i << ": Compactness=" << compactness << std::endl;
+        // std::cout << "Contour " << i << ": Compactness=" << compactness << std::endl;
 
         // Keep contours with compactness >= 10
         if (compactness >= 10) {
             valid_contours.push_back(contours[i]);
-        } else {
-            std::cout << "Contour " << i << ": Removed (compactness < 10)" << std::endl;
-        }
+        } 
+        // else {
+        //     std::cout << "Contour " << i << ": Removed (compactness < 10)" << std::endl;
+        // }
     }
 
     // Early exit if no valid contours
@@ -254,10 +264,6 @@ std::vector<cv::Vec4i> lineDetection(cv::Mat & image) {
         return std::vector<cv::Vec4i>();
     }
 
-    double vert_thresh = 150; // 150 pixels in assumption this encapsulates line width with some tolerance. 500px width - modify as necessary
-    double tau_theta = 0.0872665; // 3 deg: 0.0523599 5 deg: 0.0872665 10 deg: 0.174533
-    double tau_s = 2000; //for spatial non-overlapping scenarios
-
     // Rescale lines back to original image size 
     for (auto& line : lines) {
         line[0] = static_cast<int>(line[0] / fx);
@@ -267,7 +273,7 @@ std::vector<cv::Vec4i> lineDetection(cv::Mat & image) {
     }
 
     // Create a vector of LineSegment structs to store line properties
-    std::vector<LineSegment> segments; // holds all line detections from HoughLinesP with struct per line
+    std::vector<LineSegment> segments; 
     for (auto& line: lines) {
         LineSegment seg;
         seg.line = line;
@@ -282,8 +288,11 @@ std::vector<cv::Vec4i> lineDetection(cv::Mat & image) {
     std::vector<std::vector<LineSegment>> clusters;
     std::vector<bool> processed(segments.size(), false);
 
+    double vert_thresh = 150; // 150 pixels in assumption this encapsulates line width with some tolerance. 500px width - modify as necessary
+    double tau_theta = 0.0872665; // 3 deg: 0.0523599 5 deg: 0.0872665 10 deg: 0.174533
+    double tau_s = 2000; //for spatial non-overlapping scenarios
+
     // DBSCAN-based Line Clustering
-    // I essentially want to remove a seg from segments once its clustered. so the first line should be a cluster.
     for (size_t i = 0; i < segments.size(); ++i) {
         if (processed[i]) continue;
         std::vector<LineSegment> cluster;
@@ -303,6 +312,7 @@ std::vector<cv::Vec4i> lineDetection(cv::Mat & image) {
                 processed[j] = true;
             }
             
+            // DEBUG INFO
             // std::string angular_str = angular_ok ? "TRUE" : "FALSE";
             // std::string vertical_str = vertical_ok ? "TRUE" : "FALSE";
             // std::string spatial_str = spatial_ok ? "TRUE" : "FALSE";
@@ -327,81 +337,33 @@ std::vector<cv::Vec4i> lineDetection(cv::Mat & image) {
         }
     }
 
-    // For outputting the clusters 
-    // std::vector<std::vector<cv::Vec4i>> cluster_lines;
-    // for (const auto& cluster : clusters) {
-    //     if (cluster.empty()) continue;
-    //     std::vector<cv::Vec4i> cluster_line_vec;
-    //     for (const auto& line : cluster){
-    //         cluster_line_vec.push_back(line.line);
-    //     }
-    //     cluster_lines.push_back(cluster_line_vec);
-    // }
-
-    timer.reset(); // Timer ends here
+    timer.reset(); // Line Detection timer ends here
 
     return representative_lines; 
 }
 
-// std::vector<std::pair<double, double>>
 void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
-    auto timer = std::make_unique<Timer>("IPM Processing"); // Timer starts here
+    auto timer = std::make_unique<Timer>("IPM Processing"); // IPM timer starts here
 
     cv_bridge::CvImagePtr cv_ptr;
     try {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
     } catch (cv_bridge::Exception& e) {
         ROS_ERROR("cv_bridge exception: %s", e.what());
-        // return {};
     }
 
+    auto timer2 = std::make_unique<Timer>("Undistorting Image"); // Undistorting timer starts here - 9ms avg
+    cv::Mat undistorted_img;
+    cv::undistort(cv_ptr->image, undistorted_img, K_cv, D_cv);
+    timer2.reset();
+
     cv::Mat warped;
-    cv::warpPerspective(cv_ptr->image, warped, H_cv, cv::Size(500, 3000)); // we need to fully understand how it does this scaling
-    // cv::Mat warpedCopy = warped.clone();
-
-    // Pre-processing: Thin the line to approximate centerline
-    // cv::GaussianBlur(warped, warped, cv::Size(5, 5), 0);
-
+    cv::warpPerspective(undistorted_img, warped, H_cv, cv::Size(500, 3000)); 
 
     cv::threshold(warped, warped, 128, 255, cv::THRESH_BINARY);
-    // cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)); //whats the difference between this and cv::Mat()
-
-    // Get centerline points
-    // std::vector<cv::Point> points;
-    // cv::findNonZero(warped, points); //CHECK: Profile, isn't used right now anyways
-    // ROS_INFO("Number of centerline points: %zu", points.size());
-
-    // Subsample points for speed (e.g., every 5th point) - seems like slow operation for 400367 points?
-    // std::vector<cv::Point> sampled_points;
-    // for (size_t i = 0; i < points.size(); i += 5) {
-    //     sampled_points.push_back(points[i]);
-    // }
-    // ROS_INFO("Number of sampled points: %zu", sampled_points.size());
-
-    // Fit lines with Hough
-    // std::vector<cv::Vec4i> lines;
-    // if (!sampled_points.empty()) {
-    //     auto lines = lineDetection(warped);
-    // }
-
-    auto rep_lines = lineDetection(warped);
+    auto rep_lines = lineDetection(warped); //this can be empty - currently no issues, still publishes empty message as desired 
     
-    // if (!rep_lines.empty()) {
-    //     ROS_INFO("No representative lines detected, skipping visualization and publishing");
-    //     return;
-    // }
-    // ROS_INFO("Number of clusters detected: %zu", clusters.size());
-
-    // size_t total_lines = 0;
-    // for (const auto& cluster : clusters) {
-    //     total_lines += cluster.size();
-    // }
-    // ROS_INFO("Number of lines detected: %zu", total_lines);
-
-    // ROS_INFO("Number of lines detected: %zu", lines.size());
-
     cv::Mat warped_with_lines;
-
     cv::cvtColor(warped, warped_with_lines, cv::COLOR_GRAY2BGR);
 
     // // for representative_lines
@@ -415,25 +377,6 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
         index++;
     }
 
-    // Initialize random number generator
-    // std::random_device rd;
-    // std::mt19937 gen(rd());
-    // std::uniform_int_distribution<int> dist(0, 255);
-
-    // for (const auto& cluster : clusters) {
-    //     // Generate random color for this cluster
-    //     cv::Scalar color(dist(gen), dist(gen), dist(gen)); // Random BGR
-
-    //     for (const auto& line : cluster) {
-    //         cv::Point pt1(line[0], line[1]);
-    //         cv::Point pt2(line[2], line[3]);
-    //         cv::line(warped_with_lines, pt1, pt2, color, 1);
-    //     }
-    // }
-
-    // sensor_msgs::ImagePtr warped_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", warpedCopy).toImageMsg();
-
-
     // Overlay warped_with_lines onto image_og
     cv::Mat combined_image;
     if (!image_og.empty()) {
@@ -444,12 +387,9 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
         combined_image = warped_with_lines;
     }
 
-    // downscale if slow and remove if not debugging
     sensor_msgs::ImagePtr warped_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", combined_image).toImageMsg();
     warped_msg->header = msg->header;
     warped_image_pub_.publish(warped_msg);
-
-    auto timer2 = std::make_unique<Timer>("Point Processing"); // Timer starts here
 
     // Publish LineArray
     auto_patrol::LineArray line_array;
@@ -465,8 +405,7 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
     // Cache transform once
     geometry_msgs::TransformStamped transform;
     try {
-        auto timer3 = std::make_unique<Timer>("Transform Lookup");
-        transform = tf_buffer_.lookupTransform("map", "base_link", ros::Time(0), ros::Duration(0.1));
+        transform = tf_buffer_.lookupTransform("map", "base_footprint", ros::Time(0), ros::Duration(0.1));
     } catch (tf2::TransformException& ex) {
         ROS_WARN("Transform failed: %s", ex.what());
         return;
@@ -475,13 +414,13 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
     for (const auto& line : rep_lines) {
         // Convert pixel coordinates to base_link frame (meters)
         geometry_msgs::PointStamped pt1, pt2;
-        pt1.header.frame_id = "base_link";
+        pt1.header.frame_id = "base_footprint";
         pt1.header.stamp = msg->header.stamp; // Use image timestamp
         pt1.point.x = line[0] * scale_x + x_min;
         pt1.point.y = line[1] * scale_y + y_min;
         pt1.point.z = 0.0;
 
-        pt2.header.frame_id = "base_link";
+        pt2.header.frame_id = "base_footprint";
         pt2.header.stamp = msg->header.stamp;
         pt2.point.x = line[2] * scale_x + x_min;
         pt2.point.y = line[3] * scale_y + y_min;
@@ -489,7 +428,6 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
 
         // Apply cached transform
         geometry_msgs::PointStamped pt1_map, pt2_map;
-        auto timer4 = std::make_unique<Timer>("Transform Apply");
         tf2::doTransform(pt1, pt1_map, transform);
         tf2::doTransform(pt2, pt2_map, transform);
 
@@ -501,73 +439,8 @@ void Ipm::computeLineCoordinates(const sensor_msgs::ImageConstPtr& msg) {
         line_array.lines.push_back(line_msg);
     }
 
-    line_one_pub_.publish(line_array);
-    timer2.reset();
+    line_one_pub_.publish(line_array); //line_array is scoped to this function, so no issue with publishing. It is empty if rep_lines is empty. 
     timer.reset();
-
-    // double scale_x = 1.5 / 500.0, scale_y = -9.0 / 3000.0;
-    // double x_min = -0.75, y_min = 10.0;
-    // std::vector<std::pair<double, double>> coordinates;
-    // for (const auto& line : lines) {
-    //     double x1 = line[0] * scale_x + x_min;
-    //     double y1 = line[1] * scale_y + y_min;
-    //     double x2 = line[2] * scale_x + x_min;
-    //     double y2 = line[3] * scale_y + y_min;
-    //     coordinates.emplace_back(x1, y1);
-    //     coordinates.emplace_back(x2, y2);
-    // }
-
-    // // Publish the first line in the map frame
-    // if (!lines.empty()) {
-    //     visualization_msgs::Marker line_marker;
-    //     line_marker.header.frame_id = "map";
-    //     line_marker.header.stamp = msg->header.stamp;
-    //     line_marker.ns = "lines";
-    //     line_marker.id = 0;
-    //     line_marker.type = visualization_msgs::Marker::LINE_STRIP;
-    //     line_marker.action = visualization_msgs::Marker::ADD;
-
-    //     // Original points in base_link frame
-    //     geometry_msgs::Point p1_base, p2_base;
-    //     p1_base.x = coordinates[0].first;
-    //     p1_base.y = coordinates[0].second;
-    //     p1_base.z = 0.0;
-    //     p2_base.x = coordinates[1].first;
-    //     p2_base.y = coordinates[1].second;
-    //     p2_base.z = 0.0;
-
-    //     try {
-    //         Timer t("Transforming");
-    //         // Lookup transform from base_link to map
-    //         geometry_msgs::TransformStamped transform = tf_buffer_.lookupTransform("map", "base_link", ros::Time(0), ros::Duration(1.0));
-
-    //         // Transform points
-    //         geometry_msgs::Point p1_map, p2_map;
-    //         tf2::doTransform(p1_base, p1_map, transform);
-    //         tf2::doTransform(p2_base, p2_map, transform);
-
-    //         // Add transformed points to marker
-    //         line_marker.points = {p1_map, p2_map};
-
-    //         ROS_INFO("Transformed p1: x=%f, y=%f, z=%f", p1_map.x, p1_map.y, p1_map.z);
-    //         ROS_INFO("Transformed p2: x=%f, y=%f, z=%f", p2_map.x, p2_map.y, p2_map.z);
-    //     } catch (tf2::TransformException& ex) {
-    //         ROS_WARN("Failed to transform line points: %s", ex.what());
-    //         // Fallback: Publish untransformed points
-    //         line_marker.points = {p1_base, p2_base};
-    //     }
-
-    //     line_marker.scale.x = 0.05;
-    //     line_marker.color.r = 1.0;
-    //     line_marker.color.g = 0.0;
-    //     line_marker.color.b = 0.0;
-    //     line_marker.color.a = 1.0;
-    //     line_marker.lifetime = ros::Duration(0);
-
-    //     line_one_pub_.publish(line_marker);
-    // }
-
-    // return coordinates;
 }
 
 void Ipm::imageCallback(const sensor_msgs::ImageConstPtr& msg) {
@@ -580,10 +453,11 @@ void Ipm::imageOGCallback(const sensor_msgs::CompressedImageConstPtr& msg) {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     } catch (cv_bridge::Exception& e) {
         ROS_ERROR("cv_bridge exception: %s", e.what());
-        // return {};
     }
 
-    cv::warpPerspective(cv_ptr->image, image_og, H_cv, cv::Size(500, 3000)); // we need to fully understand how it does this scaling
+    cv::Mat undistorted_image;
+    cv::undistort(cv_ptr->image, undistorted_image, K_cv, D_cv);
+    cv::warpPerspective(undistorted_image, image_og, H_cv, cv::Size(500, 3000)); 
 
 }
 
